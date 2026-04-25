@@ -390,16 +390,6 @@ function App() {
   }, [mode]);
 
   useEffect(() => {
-    const appWindow = getCurrentWindow();
-    const frame = window.requestAnimationFrame(() => {
-      void appWindow.show();
-      void appWindow.setFocus();
-    });
-
-    return () => window.cancelAnimationFrame(frame);
-  }, []);
-
-  useEffect(() => {
     let unlisten: (() => void) | undefined;
 
     getCurrentWindow()

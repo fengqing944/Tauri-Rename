@@ -792,6 +792,12 @@ pub fn run() {
             app.handle()
                 .plugin(tauri_plugin_window_state::Builder::default().build())?;
 
+            #[cfg(desktop)]
+            if let Some(window) = app.get_webview_window("main") {
+                window.show()?;
+                window.set_focus()?;
+            }
+
             Ok(())
         })
         .plugin(tauri_plugin_dialog::init())
