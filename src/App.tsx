@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   AlertTriangle,
+  ArrowDownUp,
   CheckCircle,
   Copy,
   FilePlus,
@@ -15,6 +16,7 @@ import {
   Play,
   Plus,
   RefreshCw,
+  Search,
   Settings,
   Wand2,
   X,
@@ -121,6 +123,24 @@ function shortName(path: string): string {
   return parts.length ? parts[parts.length - 1] : path;
 }
 
+function normalizeKey(value: string): string {
+  return value.trim().toLocaleLowerCase();
+}
+
+function compareText(left: string, right: string): number {
+  return left.localeCompare(right, "zh-Hans-CN", {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
+function sortMappings(items: DirectoryMapping[]): DirectoryMapping[] {
+  return [...items].sort((left, right) => {
+    const fromCompare = compareText(left.from, right.from);
+    return fromCompare === 0 ? compareText(left.to, right.to) : fromCompare;
+  });
+}
+
 function uniqueMerge(current: string[], incoming: string[], mode: Mode): string[] {
   const merged = [...current];
 
@@ -133,11 +153,23 @@ function uniqueMerge(current: string[], incoming: string[], mode: Mode): string[
   return mode === "single" ? merged.slice(-1) : merged;
 }
 
-function parseSpecialDirs(value: string): string[] {
+function splitNames(value: string): string[] {
   return value
     .split(/[\n,，]+/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function findDuplicateMappingKeys(mappings: DirectoryMapping[]): Set<string> {
+  const counts = new Map<string, number>();
+
+  for (const mapping of mappings) {
+    const key = normalizeKey(mapping.from);
+    if (!key) continue;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+
+  return new Set([...counts.entries()].filter(([, count]) => count > 1).map(([key]) => key));
 }
 
 function App() {
@@ -147,11 +179,16 @@ function App() {
   const [copyFiles, setCopyFiles] = useState<string[]>([]);
   const [presetId, setPresetId] = useState(folderPresets[0].id);
   const [folderNames, setFolderNames] = useState<FolderNames>(folderPresets[0].folders);
-  const [mappings, setMappings] = useState<DirectoryMapping[]>(defaultMappings);
-  const [specialDirs, setSpecialDirs] = useState("特典, Bonus, Extras");
+  const [mappings, setMappings] = useState<DirectoryMapping[]>(sortMappings(defaultMappings));
+  const [mappingQuery, setMappingQuery] = useState("");
+  const [mappingDraft, setMappingDraft] = useState<DirectoryMapping>({ from: "", to: "图包" });
+  const [specialDirs, setSpecialDirs] = useState<string[]>(["Bonus", "Extras", "特典"]);
+  const [specialInput, setSpecialInput] = useState("");
+  const [specialQuery, setSpecialQuery] = useState("");
   const [copyExtras, setCopyExtras] = useState(true);
   const [includeText, setIncludeText] = useState(false);
   const [dryRun, setDryRun] = useState(false);
+  const [reverseRenameOrder, setReverseRenameOrder] = useState(false);
   const [renamePattern, setRenamePattern] = useState("{folder}_{category}_{index}");
   const [startIndex, setStartIndex] = useState(1);
   const [padding, setPadding] = useState(3);
@@ -160,8 +197,41 @@ function App() {
   const [error, setError] = useState<string | null>(null);
 
   const activeRoots = useMemo(() => (mode === "single" ? roots.slice(0, 1) : roots), [mode, roots]);
-  const canProcess = activeRoots.length > 0 && !isProcessing;
-  const latestEntries = report?.entries.slice(-160).reverse() ?? [];
+  const duplicateMappingKeys = useMemo(() => findDuplicateMappingKeys(mappings), [mappings]);
+  const hasMappingDuplicates = duplicateMappingKeys.size > 0;
+  const canProcess = activeRoots.length > 0 && !isProcessing && !hasMappingDuplicates;
+
+  const mappingRows = useMemo(() => {
+    const query = normalizeKey(mappingQuery);
+    return mappings
+      .map((mapping, index) => ({ mapping, index }))
+      .filter(({ mapping }) => {
+        if (!query) return true;
+        return normalizeKey(`${mapping.from} ${mapping.to}`).includes(query);
+      })
+      .sort((left, right) => {
+        const fromCompare = compareText(left.mapping.from, right.mapping.from);
+        return fromCompare === 0
+          ? compareText(left.mapping.to, right.mapping.to)
+          : fromCompare;
+      });
+  }, [mappingQuery, mappings]);
+
+  const specialRows = useMemo(() => {
+    const query = normalizeKey(specialQuery);
+    return specialDirs
+      .filter((name) => !query || normalizeKey(name).includes(query))
+      .sort(compareText);
+  }, [specialDirs, specialQuery]);
+
+  const mappingDraftDuplicate = useMemo(
+    () =>
+      Boolean(mappingDraft.from.trim()) &&
+      mappings.some((mapping) => normalizeKey(mapping.from) === normalizeKey(mappingDraft.from)),
+    [mappingDraft.from, mappings],
+  );
+
+  const latestEntries = report?.entries.slice(-80).reverse() ?? [];
 
   const addRoots = useCallback(
     (paths: string[]) => {
@@ -237,8 +307,41 @@ function App() {
     );
   };
 
+  const addMapping = () => {
+    const from = mappingDraft.from.trim();
+    const to = mappingDraft.to.trim();
+    if (!from || !to || mappingDraftDuplicate) return;
+
+    setMappings((current) => sortMappings([...current, { from, to }]));
+    setMappingDraft({ from: "", to: "图包" });
+  };
+
   const removeMapping = (index: number) => {
     setMappings((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  };
+
+  const addSpecialDirs = () => {
+    const incoming = splitNames(specialInput);
+    if (!incoming.length) return;
+
+    setSpecialDirs((current) => {
+      const existing = new Set(current.map(normalizeKey));
+      const next = [...current];
+
+      for (const name of incoming) {
+        const key = normalizeKey(name);
+        if (!key || existing.has(key)) continue;
+        existing.add(key);
+        next.push(name);
+      }
+
+      return next.sort(compareText);
+    });
+    setSpecialInput("");
+  };
+
+  const removeSpecialDir = (name: string) => {
+    setSpecialDirs((current) => current.filter((item) => normalizeKey(item) !== normalizeKey(name)));
   };
 
   const runProcess = async () => {
@@ -254,7 +357,7 @@ function App() {
           roots: activeRoots,
           folderNames,
           mappings: mappings.filter((mapping) => mapping.from.trim() && mapping.to.trim()),
-          specialDirs: parseSpecialDirs(specialDirs),
+          specialDirs,
           copyFiles,
           copyExtras,
           renamePattern,
@@ -262,6 +365,7 @@ function App() {
           padding: Math.min(8, Math.max(1, Number(padding) || 3)),
           dryRun,
           includeText,
+          reverseRenameOrder,
         },
       });
       setReport(result);
@@ -360,7 +464,7 @@ function App() {
           type="button"
           disabled={!canProcess}
           onClick={runProcess}
-          title={dryRun ? "生成预览" : "开始处理"}
+          title={hasMappingDuplicates ? "请先处理重复映射" : dryRun ? "生成预览" : "开始处理"}
         >
           {isProcessing ? <RefreshCw size={18} className="spin" /> : <Play size={18} />}
           {isProcessing ? "处理中" : dryRun ? "生成预览" : "开始处理"}
@@ -383,6 +487,7 @@ function App() {
               {copyFiles.length} 个补充文件
             </span>
             <span>{dryRun ? "预览" : "执行"}</span>
+            {reverseRenameOrder && <span>倒序</span>}
           </div>
         </header>
 
@@ -523,6 +628,17 @@ function App() {
                   />
                   <span>预览模式</span>
                 </label>
+                <label className="check-row">
+                  <input
+                    checked={reverseRenameOrder}
+                    type="checkbox"
+                    onChange={(event) => setReverseRenameOrder(event.target.checked)}
+                  />
+                  <span>
+                    <ArrowDownUp size={14} />
+                    倒序重命名
+                  </span>
+                </label>
               </div>
             </section>
           )}
@@ -534,34 +650,70 @@ function App() {
                   <ListChecks size={18} />
                   <h3>目录映射</h3>
                 </div>
+                {hasMappingDuplicates && (
+                  <span className="panel-badge warning">发现重复</span>
+                )}
+              </div>
+
+              <div className="toolbar-grid mapping-tools">
+                <label className="search-field">
+                  <Search size={15} />
+                  <input
+                    value={mappingQuery}
+                    placeholder="搜索映射"
+                    onChange={(event) => setMappingQuery(event.target.value)}
+                  />
+                </label>
+                <input
+                  value={mappingDraft.from}
+                  placeholder="原目录"
+                  onChange={(event) =>
+                    setMappingDraft((current) => ({ ...current, from: event.target.value }))
+                  }
+                />
+                <input
+                  value={mappingDraft.to}
+                  placeholder="目标目录"
+                  onChange={(event) =>
+                    setMappingDraft((current) => ({ ...current, to: event.target.value }))
+                  }
+                />
                 <button
+                  className="icon-text-button"
                   type="button"
-                  title="新增映射"
-                  onClick={() => setMappings((current) => [...current, { from: "", to: "图包" }])}
+                  disabled={!mappingDraft.from.trim() || !mappingDraft.to.trim() || mappingDraftDuplicate}
+                  onClick={addMapping}
                 >
                   <Plus size={16} />
+                  添加
                 </button>
               </div>
 
+              {mappingDraftDuplicate && <div className="inline-note">这个原目录已经存在。</div>}
+
               <div className="mapping-list">
-                {mappings.map((mapping, index) => (
-                  <div className="mapping-row" key={`${mapping.from}-${index}`}>
-                    <input
-                      value={mapping.from}
-                      placeholder="Pic"
-                      onChange={(event) => updateMapping(index, "from", event.target.value)}
-                    />
-                    <span>→</span>
-                    <input
-                      value={mapping.to}
-                      placeholder="图包"
-                      onChange={(event) => updateMapping(index, "to", event.target.value)}
-                    />
-                    <button type="button" title="删除映射" onClick={() => removeMapping(index)}>
-                      <Minus size={15} />
-                    </button>
-                  </div>
-                ))}
+                {mappingRows.map(({ mapping, index }) => {
+                  const duplicate = duplicateMappingKeys.has(normalizeKey(mapping.from));
+                  return (
+                    <div className={`mapping-row ${duplicate ? "duplicate" : ""}`} key={`${mapping.from}-${index}`}>
+                      <input
+                        value={mapping.from}
+                        placeholder="Pic"
+                        onChange={(event) => updateMapping(index, "from", event.target.value)}
+                      />
+                      <span>→</span>
+                      <input
+                        value={mapping.to}
+                        placeholder="图包"
+                        onChange={(event) => updateMapping(index, "to", event.target.value)}
+                      />
+                      <button type="button" title="删除映射" onClick={() => removeMapping(index)}>
+                        <Minus size={15} />
+                      </button>
+                    </div>
+                  );
+                })}
+                {!mappingRows.length && <div className="empty-log">没有匹配项</div>}
               </div>
             </section>
           )}
@@ -573,8 +725,51 @@ function App() {
                   <AlertTriangle size={18} />
                   <h3>特殊目录</h3>
                 </div>
+                <span className="panel-badge">{specialDirs.length} 个</span>
               </div>
-              <textarea value={specialDirs} onChange={(event) => setSpecialDirs(event.target.value)} />
+
+              <div className="toolbar-grid special-tools">
+                <label className="search-field">
+                  <Search size={15} />
+                  <input
+                    value={specialQuery}
+                    placeholder="搜索特殊目录"
+                    onChange={(event) => setSpecialQuery(event.target.value)}
+                  />
+                </label>
+                <input
+                  value={specialInput}
+                  placeholder="目录名"
+                  onChange={(event) => setSpecialInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      addSpecialDirs();
+                    }
+                  }}
+                />
+                <button
+                  className="icon-text-button"
+                  type="button"
+                  disabled={!specialInput.trim()}
+                  onClick={addSpecialDirs}
+                >
+                  <Plus size={16} />
+                  添加
+                </button>
+              </div>
+
+              <div className="tag-list">
+                {specialRows.map((name) => (
+                  <div className="tag-row" key={name}>
+                    <span>{name}</span>
+                    <button type="button" title="移除" onClick={() => removeSpecialDir(name)}>
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+                {!specialRows.length && <div className="empty-log">没有匹配项</div>}
+              </div>
             </section>
           )}
 
@@ -583,13 +778,8 @@ function App() {
               <div className="panel-heading">
                 <div>
                   <Info size={18} />
-                  <h3>日志</h3>
+                  <h3>处理结果</h3>
                 </div>
-                {report?.logPath && (
-                  <span className="log-path" title={report.logPath}>
-                    {shortName(report.logPath)}
-                  </span>
-                )}
               </div>
 
               {error && (
@@ -600,15 +790,18 @@ function App() {
               )}
 
               {report && (
-                <div className="stats-grid">
-                  <span>目录 {report.rootsProcessed}</span>
-                  <span>创建 {report.foldersCreated}</span>
-                  <span>映射 {report.foldersRenamed}</span>
-                  <span>移动 {report.filesMoved}</span>
-                  <span>重命名 {report.filesRenamed}</span>
-                  <span>复制 {report.filesCopied}</span>
-                  <span>跳过 {report.skipped}</span>
-                </div>
+                <>
+                  <div className="result-line">
+                    已处理 {report.rootsProcessed} 个目录，移动 {report.filesMoved} 个文件，重命名{" "}
+                    {report.filesRenamed} 个文件。
+                  </div>
+                  <div className="stats-grid">
+                    <span>创建 {report.foldersCreated}</span>
+                    <span>映射 {report.foldersRenamed}</span>
+                    <span>复制 {report.filesCopied}</span>
+                    <span>跳过 {report.skipped}</span>
+                  </div>
+                </>
               )}
 
               <div className="log-list">
@@ -623,7 +816,7 @@ function App() {
                     )}
                     <div>
                       <strong>{entry.message}</strong>
-                      {entry.path && <span>{entry.path}</span>}
+                      {entry.path && <span title={entry.path}>{shortName(entry.path)}</span>}
                     </div>
                   </div>
                 ))}

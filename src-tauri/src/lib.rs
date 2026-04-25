@@ -3,7 +3,6 @@ use std::{
     collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 #[derive(Debug, Deserialize)]
@@ -20,6 +19,7 @@ struct ProcessRequest {
     padding: usize,
     dry_run: bool,
     include_text: bool,
+    reverse_rename_order: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -68,6 +68,12 @@ enum Category {
     Texts,
 }
 
+#[derive(Debug)]
+struct RenameOperation {
+    source: PathBuf,
+    target: PathBuf,
+}
+
 #[tauri::command]
 fn process_rename(request: ProcessRequest) -> Result<ProcessReport, String> {
     if request.roots.is_empty() {
@@ -104,7 +110,6 @@ fn process_rename(request: ProcessRequest) -> Result<ProcessReport, String> {
         return Err("没有可处理的文件夹。".to_string());
     }
 
-    report.log_path = write_log_file(&request, &report)?;
     Ok(report)
 }
 
@@ -125,6 +130,7 @@ fn process_root(
 
     let mut loose_files: HashMap<Category, Vec<PathBuf>> = HashMap::new();
     let mut special_directories = Vec::new();
+    let copy_file_names = copy_extra_file_names(request);
 
     for entry in read_dir_sorted(root)? {
         let path = entry.path();
@@ -138,6 +144,11 @@ fn process_root(
 
         if path.is_file() {
             if is_tool_log(&path) {
+                continue;
+            }
+
+            if is_selected_copy_extra(&path, &copy_file_names) {
+                report.info("补充文件保留在根目录。", Some(&path));
                 continue;
             }
 
@@ -208,7 +219,7 @@ fn process_root(
             }
         }
 
-        if target_dir.exists() || !files_to_move_count(&target_dir).is_zero() {
+        if target_dir.exists() || files_to_move_count(&target_dir) > 0 {
             rename_files_in_place(
                 &target_dir,
                 &root_name,
@@ -331,7 +342,11 @@ fn rename_files_in_place(
     let mut files = Vec::new();
     collect_files(directory, &mut files)?;
     files.sort();
+    if request.reverse_rename_order {
+        files.reverse();
+    }
 
+    let mut operations = Vec::new();
     let mut index = request.start_index;
     for file in files {
         if is_tool_log(&file) {
@@ -365,19 +380,51 @@ fn rename_files_in_place(
             continue;
         }
 
-        let target = unique_path(&intended_target);
+        operations.push(RenameOperation {
+            source: file,
+            target: intended_target,
+        });
+    }
 
-        if request.dry_run {
-            report.info("预览：将重命名文件。", Some(&file));
-        } else {
-            fs::rename(&file, &target).map_err(|error| {
-                format!(
-                    "重命名失败：{} -> {} ({error})",
-                    file.display(),
-                    target.display()
-                )
-            })?;
+    if operations.is_empty() {
+        return Ok(());
+    }
+
+    if request.dry_run {
+        for operation in operations {
+            report.files_renamed += 1;
+            report.info("预览：将重命名文件。", Some(&operation.source));
         }
+        return Ok(());
+    }
+
+    let mut staged = Vec::new();
+    for (operation_index, operation) in operations.iter().enumerate() {
+        let temp_path = unique_path(&operation.source.with_file_name(format!(
+            ".rename-studio-tmp-{}-{operation_index}.tmp",
+            std::process::id()
+        )));
+
+        fs::rename(&operation.source, &temp_path).map_err(|error| {
+            format!(
+                "重命名准备失败：{} -> {} ({error})",
+                operation.source.display(),
+                temp_path.display()
+            )
+        })?;
+
+        staged.push((temp_path, operation.target.clone()));
+    }
+
+    for (temp_path, intended_target) in staged {
+        let target = unique_path(&intended_target);
+        fs::rename(&temp_path, &target).map_err(|error| {
+            format!(
+                "重命名失败：{} -> {} ({error})",
+                temp_path.display(),
+                target.display()
+            )
+        })?;
 
         report.files_renamed += 1;
         report.success("已重命名文件。", Some(&target));
@@ -407,10 +454,13 @@ fn copy_extra_files(
         let file_name = source
             .file_name()
             .ok_or_else(|| format!("无法读取补充文件名：{}", source.display()))?;
-        let destination = unique_path(&root.join(file_name));
+        let destination = root.join(file_name);
 
         if request.dry_run {
             report.info("预览：将复制补充文件。", Some(&source));
+        } else if destination.exists() {
+            report.info("补充文件已存在，未重复复制。", Some(&destination));
+            continue;
         } else {
             fs::copy(&source, &destination).map_err(|error| {
                 format!(
@@ -426,6 +476,28 @@ fn copy_extra_files(
     }
 
     Ok(())
+}
+
+fn copy_extra_file_names(request: &ProcessRequest) -> HashSet<String> {
+    if !request.copy_extras {
+        return HashSet::new();
+    }
+
+    request
+        .copy_files
+        .iter()
+        .map(PathBuf::from)
+        .filter_map(|path| {
+            path.file_name()
+                .map(|name| normalize_name(&name.to_string_lossy()))
+        })
+        .collect()
+}
+
+fn is_selected_copy_extra(path: &Path, copy_file_names: &HashSet<String>) -> bool {
+    path.file_name()
+        .map(|name| copy_file_names.contains(&normalize_name(&name.to_string_lossy())))
+        .unwrap_or(false)
 }
 
 fn ensure_dir(path: &Path, dry_run: bool, report: &mut ProcessReport) -> Result<(), String> {
@@ -637,63 +709,6 @@ fn files_to_move_count(path: &Path) -> usize {
                 .count()
         })
         .unwrap_or(0)
-}
-
-fn write_log_file(
-    request: &ProcessRequest,
-    report: &ProcessReport,
-) -> Result<Option<String>, String> {
-    if request.dry_run {
-        return Ok(None);
-    }
-
-    let Some(first_root) = request
-        .roots
-        .iter()
-        .map(PathBuf::from)
-        .find(|path| path.is_dir())
-    else {
-        return Ok(None);
-    };
-
-    let seconds = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|error| format!("生成日志时间失败：{error}"))?
-        .as_secs();
-    let log_path = first_root.join(format!("RenameStudio_{seconds}.log"));
-    let mut lines = Vec::new();
-
-    lines.push("Rename Studio 日志".to_string());
-    lines.push(format!("处理文件夹：{}", report.roots_processed));
-    lines.push(format!("创建目录：{}", report.folders_created));
-    lines.push(format!("映射目录：{}", report.folders_renamed));
-    lines.push(format!("移动文件：{}", report.files_moved));
-    lines.push(format!("重命名文件：{}", report.files_renamed));
-    lines.push(format!("复制补充文件：{}", report.files_copied));
-    lines.push(format!("跳过：{}", report.skipped));
-    lines.push(String::new());
-
-    for entry in &report.entries {
-        match &entry.path {
-            Some(path) => lines.push(format!("[{}] {} - {}", entry.level, entry.message, path)),
-            None => lines.push(format!("[{}] {}", entry.level, entry.message)),
-        }
-    }
-
-    fs::write(&log_path, lines.join("\n"))
-        .map_err(|error| format!("写入日志失败：{} ({error})", log_path.display()))?;
-
-    Ok(Some(log_path.display().to_string()))
-}
-
-trait ZeroCheck {
-    fn is_zero(&self) -> bool;
-}
-
-impl ZeroCheck for usize {
-    fn is_zero(&self) -> bool {
-        *self == 0
-    }
 }
 
 impl ProcessReport {
