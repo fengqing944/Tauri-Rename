@@ -617,7 +617,6 @@ label {
   font-size: 12px;
 }
 
-.mapping-list,
 .tag-list,
 .log-list {
   display: flex;
@@ -629,11 +628,24 @@ label {
   padding-right: 3px;
 }
 
+.mapping-list {
+  display: block;
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 1px 8px 12px 1px;
+  scrollbar-gutter: stable;
+}
+
 .mapping-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 22px minmax(0, 1fr) 30px;
   align-items: center;
   gap: 8px;
+}
+
+.mapping-row + .mapping-row {
+  margin-top: 8px;
 }
 
 .mapping-row span {
@@ -671,6 +683,31 @@ label {
   border: 1px solid #e1e4e8;
   border-radius: 7px;
   font-size: 14px;
+}
+
+.log-file-line {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  margin-bottom: 10px;
+  padding: 9px 12px;
+  color: #33373d;
+  background: #ffffff;
+  border: 1px solid #d7d9dd;
+  border-radius: 7px;
+  font-size: 13px;
+}
+
+.log-file-line span {
+  color: #70757d;
+  font-weight: 720;
+}
+
+.log-file-line strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 520;
 }
 
 .stats-grid {
@@ -721,6 +758,10 @@ label {
   margin-top: 2px;
 }
 
+.log-row > div {
+  min-width: 0;
+}
+
 .log-row.success {
   border-left-color: #59606a;
 }
@@ -731,8 +772,11 @@ label {
 
 .log-row strong {
   display: block;
+  overflow: hidden;
   color: #33373d;
   font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .log-row span {

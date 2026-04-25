@@ -3,7 +3,9 @@ use std::{
     collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
+    time::{SystemTime, UNIX_EPOCH},
 };
+use tauri::Manager;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -75,7 +77,7 @@ struct RenameOperation {
 }
 
 #[tauri::command]
-fn process_rename(request: ProcessRequest) -> Result<ProcessReport, String> {
+fn process_rename(app: tauri::AppHandle, request: ProcessRequest) -> Result<ProcessReport, String> {
     if request.roots.is_empty() {
         return Err("请先添加至少一个待处理文件夹。".to_string());
     }
@@ -110,6 +112,7 @@ fn process_rename(request: ProcessRequest) -> Result<ProcessReport, String> {
         return Err("没有可处理的文件夹。".to_string());
     }
 
+    report.log_path = write_log_file(&app, &request, &report)?;
     Ok(report)
 }
 
@@ -711,6 +714,54 @@ fn files_to_move_count(path: &Path) -> usize {
         .unwrap_or(0)
 }
 
+fn write_log_file(
+    app: &tauri::AppHandle,
+    request: &ProcessRequest,
+    report: &ProcessReport,
+) -> Result<Option<String>, String> {
+    if request.dry_run {
+        return Ok(None);
+    }
+
+    let log_dir = app
+        .path()
+        .app_log_dir()
+        .or_else(|_| app.path().app_data_dir())
+        .map_err(|error| format!("获取应用日志目录失败：{error}"))?;
+
+    fs::create_dir_all(&log_dir)
+        .map_err(|error| format!("创建应用日志目录失败：{} ({error})", log_dir.display()))?;
+
+    let seconds = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| format!("生成日志时间失败：{error}"))?
+        .as_secs();
+    let log_path = log_dir.join(format!("RenameStudio_{seconds}.log"));
+    let mut lines = Vec::new();
+
+    lines.push("Rename Studio 日志".to_string());
+    lines.push(format!("处理文件夹：{}", report.roots_processed));
+    lines.push(format!("创建目录：{}", report.folders_created));
+    lines.push(format!("映射目录：{}", report.folders_renamed));
+    lines.push(format!("移动文件：{}", report.files_moved));
+    lines.push(format!("重命名文件：{}", report.files_renamed));
+    lines.push(format!("复制补充文件：{}", report.files_copied));
+    lines.push(format!("跳过：{}", report.skipped));
+    lines.push(String::new());
+
+    for entry in &report.entries {
+        match &entry.path {
+            Some(path) => lines.push(format!("[{}] {} - {}", entry.level, entry.message, path)),
+            None => lines.push(format!("[{}] {}", entry.level, entry.message)),
+        }
+    }
+
+    fs::write(&log_path, lines.join("\n"))
+        .map_err(|error| format!("写入日志失败：{} ({error})", log_path.display()))?;
+
+    Ok(Some(log_path.display().to_string()))
+}
+
 impl ProcessReport {
     fn info(&mut self, message: &str, path: Option<&Path>) {
         self.push("info", message, path);
@@ -736,6 +787,13 @@ impl ProcessReport {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            #[cfg(desktop)]
+            app.handle()
+                .plugin(tauri_plugin_window_state::Builder::default().build())?;
+
+            Ok(())
+        })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![process_rename])

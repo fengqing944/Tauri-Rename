@@ -390,6 +390,16 @@ function App() {
   }, [mode]);
 
   useEffect(() => {
+    const appWindow = getCurrentWindow();
+    const frame = window.requestAnimationFrame(() => {
+      void appWindow.show();
+      void appWindow.setFocus();
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
     let unlisten: (() => void) | undefined;
 
     getCurrentWindow()
@@ -947,6 +957,12 @@ function App() {
                     已处理 {report.rootsProcessed} 个目录，移动 {report.filesMoved} 个文件，重命名{" "}
                     {report.filesRenamed} 个文件。
                   </div>
+                  {report.logPath && (
+                    <div className="log-file-line" title={report.logPath}>
+                      <span>日志文件</span>
+                      <strong>{report.logPath}</strong>
+                    </div>
+                  )}
                   <div className="stats-grid">
                     <span>创建 {report.foldersCreated}</span>
                     <span>映射 {report.foldersRenamed}</span>
