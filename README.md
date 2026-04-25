@@ -10,8 +10,9 @@ Rename Studio is a Tauri 2 desktop tool for batch folder classification, file mo
 - Map existing directories, for example `Pic` to `图包`.
 - Keep special directories in place and only rename their files.
 - Copy selected image, GIF, or TXT files into each processed root folder.
-- Write operation logs to the processed root folder.
+- Show concise operation logs in the app.
 - Preview operations before applying them.
+- Restore saved presets, mappings, special directories, supplemental files, and rename settings.
 
 ## Development
 

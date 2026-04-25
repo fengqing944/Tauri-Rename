@@ -63,6 +63,23 @@ type FolderPreset = {
   folders: FolderNames;
 };
 
+type PersistedSettings = {
+  version: 1;
+  mode?: Mode;
+  presetId?: string;
+  folderNames?: FolderNames;
+  mappings?: DirectoryMapping[];
+  specialDirs?: string[];
+  copyFiles?: string[];
+  copyExtras?: boolean;
+  includeText?: boolean;
+  dryRun?: boolean;
+  reverseRenameOrder?: boolean;
+  renamePattern?: string;
+  startIndex?: number;
+  padding?: number;
+};
+
 const folderPresets: FolderPreset[] = [
   {
     id: "cn-standard",
@@ -112,6 +129,11 @@ const copyableExtensions = [
   "gif",
   "txt",
 ];
+
+const settingsStorageKey = "rename-studio-settings-v1";
+const defaultFolderNames = folderPresets[0].folders;
+const defaultSpecialDirs = ["Bonus", "Extras", "特典"];
+const defaultRenamePattern = "{folder}_{category}_{index}";
 
 function normalizeSelection(selection: string | string[] | null): string[] {
   if (!selection) return [];
@@ -172,26 +194,111 @@ function findDuplicateMappingKeys(mappings: DirectoryMapping[]): Set<string> {
   return new Set([...counts.entries()].filter(([, count]) => count > 1).map(([key]) => key));
 }
 
+function isMode(value: unknown): value is Mode {
+  return value === "single" || value === "batch";
+}
+
+function isFolderNames(value: unknown): value is FolderNames {
+  if (!value || typeof value !== "object") return false;
+  const folderNames = value as Record<string, unknown>;
+  return ["images", "videos", "gifs", "texts"].every(
+    (key) => typeof folderNames[key] === "string",
+  );
+}
+
+function cleanStringArray(value: unknown, fallback: string[] = []): string[] {
+  if (!Array.isArray(value)) return fallback;
+  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+}
+
+function cleanMappings(value: unknown): DirectoryMapping[] {
+  if (!Array.isArray(value)) return sortMappings(defaultMappings);
+
+  const seen = new Set<string>();
+  const mappings = value.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const candidate = item as Record<string, unknown>;
+    if (typeof candidate.from !== "string" || typeof candidate.to !== "string") return [];
+
+    const from = candidate.from.trim();
+    const to = candidate.to.trim();
+    const key = normalizeKey(from);
+    if (!from || !to || seen.has(key)) return [];
+
+    seen.add(key);
+    return [{ from, to }];
+  });
+
+  return mappings.length ? sortMappings(mappings) : sortMappings(defaultMappings);
+}
+
+function readPersistedSettings(): Partial<PersistedSettings> {
+  try {
+    const raw = localStorage.getItem(settingsStorageKey);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Partial<PersistedSettings>;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writePersistedSettings(settings: PersistedSettings) {
+  try {
+    localStorage.setItem(settingsStorageKey, JSON.stringify(settings));
+  } catch {
+    // Settings persistence is best-effort; file operations must keep working.
+  }
+}
+
 function App() {
-  const [mode, setMode] = useState<Mode>("single");
+  const savedSettings = useMemo(() => readPersistedSettings(), []);
+  const [mode, setMode] = useState<Mode>(() =>
+    isMode(savedSettings.mode) ? savedSettings.mode : "single",
+  );
   const [activeTab, setActiveTab] = useState<RuleTab>("rules");
   const [roots, setRoots] = useState<string[]>([]);
-  const [copyFiles, setCopyFiles] = useState<string[]>([]);
-  const [presetId, setPresetId] = useState(folderPresets[0].id);
-  const [folderNames, setFolderNames] = useState<FolderNames>(folderPresets[0].folders);
-  const [mappings, setMappings] = useState<DirectoryMapping[]>(sortMappings(defaultMappings));
+  const [copyFiles, setCopyFiles] = useState<string[]>(() => cleanStringArray(savedSettings.copyFiles));
+  const [presetId, setPresetId] = useState(() =>
+    typeof savedSettings.presetId === "string" &&
+    folderPresets.some((preset) => preset.id === savedSettings.presetId)
+      ? savedSettings.presetId
+      : folderPresets[0].id,
+  );
+  const [folderNames, setFolderNames] = useState<FolderNames>(() =>
+    isFolderNames(savedSettings.folderNames) ? savedSettings.folderNames : defaultFolderNames,
+  );
+  const [mappings, setMappings] = useState<DirectoryMapping[]>(() =>
+    cleanMappings(savedSettings.mappings),
+  );
   const [mappingQuery, setMappingQuery] = useState("");
   const [mappingDraft, setMappingDraft] = useState<DirectoryMapping>({ from: "", to: "图包" });
-  const [specialDirs, setSpecialDirs] = useState<string[]>(["Bonus", "Extras", "特典"]);
+  const [specialDirs, setSpecialDirs] = useState<string[]>(() =>
+    cleanStringArray(savedSettings.specialDirs, defaultSpecialDirs).sort(compareText),
+  );
   const [specialInput, setSpecialInput] = useState("");
   const [specialQuery, setSpecialQuery] = useState("");
-  const [copyExtras, setCopyExtras] = useState(true);
-  const [includeText, setIncludeText] = useState(false);
-  const [dryRun, setDryRun] = useState(false);
-  const [reverseRenameOrder, setReverseRenameOrder] = useState(false);
-  const [renamePattern, setRenamePattern] = useState("{folder}_{category}_{index}");
-  const [startIndex, setStartIndex] = useState(1);
-  const [padding, setPadding] = useState(3);
+  const [copyExtras, setCopyExtras] = useState(() =>
+    typeof savedSettings.copyExtras === "boolean" ? savedSettings.copyExtras : true,
+  );
+  const [includeText, setIncludeText] = useState(() => savedSettings.includeText === true);
+  const [dryRun, setDryRun] = useState(() => savedSettings.dryRun === true);
+  const [reverseRenameOrder, setReverseRenameOrder] = useState(
+    () => savedSettings.reverseRenameOrder === true,
+  );
+  const [renamePattern, setRenamePattern] = useState(() =>
+    typeof savedSettings.renamePattern === "string" && savedSettings.renamePattern.trim()
+      ? savedSettings.renamePattern
+      : defaultRenamePattern,
+  );
+  const [startIndex, setStartIndex] = useState(() =>
+    typeof savedSettings.startIndex === "number" && savedSettings.startIndex > 0
+      ? savedSettings.startIndex
+      : 1,
+  );
+  const [padding, setPadding] = useState(() =>
+    typeof savedSettings.padding === "number" && savedSettings.padding > 0 ? savedSettings.padding : 3,
+  );
   const [isProcessing, setIsProcessing] = useState(false);
   const [report, setReport] = useState<ProcessReport | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -232,6 +339,39 @@ function App() {
   );
 
   const latestEntries = report?.entries.slice(-80).reverse() ?? [];
+
+  useEffect(() => {
+    writePersistedSettings({
+      version: 1,
+      mode,
+      presetId,
+      folderNames,
+      mappings,
+      specialDirs,
+      copyFiles,
+      copyExtras,
+      includeText,
+      dryRun,
+      reverseRenameOrder,
+      renamePattern,
+      startIndex,
+      padding,
+    });
+  }, [
+    mode,
+    presetId,
+    folderNames,
+    mappings,
+    specialDirs,
+    copyFiles,
+    copyExtras,
+    includeText,
+    dryRun,
+    reverseRenameOrder,
+    renamePattern,
+    startIndex,
+    padding,
+  ]);
 
   const addRoots = useCallback(
     (paths: string[]) => {
@@ -443,6 +583,11 @@ function App() {
           <div className="section-title">
             <Copy size={16} />
             <span>补充文件</span>
+            {copyFiles.length > 0 && (
+              <button className="mini-action" type="button" onClick={() => setCopyFiles([])}>
+                清空
+              </button>
+            )}
           </div>
           <button className="ghost-action" type="button" onClick={chooseCopyFiles}>
             <FilePlus size={16} />
@@ -450,12 +595,19 @@ function App() {
           </button>
           <div className="compact-list">
             {copyFiles.slice(0, 6).map((path) => (
-              <span key={path} title={path}>
-                {shortName(path)}
-              </span>
+              <div className="copy-chip" key={path} title={path}>
+                <span>{shortName(path)}</span>
+                <button
+                  type="button"
+                  title="移除"
+                  onClick={() => setCopyFiles((current) => current.filter((item) => item !== path))}
+                >
+                  <X size={12} />
+                </button>
+              </div>
             ))}
-            {copyFiles.length > 6 && <span>+{copyFiles.length - 6}</span>}
-            {!copyFiles.length && <span>未选择</span>}
+            {copyFiles.length > 6 && <div className="copy-chip">+{copyFiles.length - 6}</div>}
+            {!copyFiles.length && <div className="copy-chip">未选择</div>}
           </div>
         </div>
 
