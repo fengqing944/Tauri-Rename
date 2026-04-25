@@ -13,12 +13,6 @@ Rename Studio is a Tauri 2 desktop tool for batch folder classification, file mo
 - Write operation logs to the processed root folder.
 - Preview operations before applying them.
 
-## Default Flow
-
-For a folder like `蠢沫沫 情人节`, loose images are moved into `图包`, videos into `视频`, and `.gif` files into `GIF`. Files are then renamed using the configured template, such as `{folder}_{category}_{index}`.
-
-If the folder only contains images, only the image category directory is created.
-
 ## Development
 
 ```bash

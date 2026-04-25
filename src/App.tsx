@@ -23,6 +23,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import "./App.css";
 
 type Mode = "single" | "batch";
+type RuleTab = "rules" | "mapping" | "special" | "log";
 
 type FolderNames = {
   images: string;
@@ -141,6 +142,7 @@ function parseSpecialDirs(value: string): string[] {
 
 function App() {
   const [mode, setMode] = useState<Mode>("single");
+  const [activeTab, setActiveTab] = useState<RuleTab>("rules");
   const [roots, setRoots] = useState<string[]>([]);
   const [copyFiles, setCopyFiles] = useState<string[]>([]);
   const [presetId, setPresetId] = useState(folderPresets[0].id);
@@ -159,6 +161,7 @@ function App() {
 
   const activeRoots = useMemo(() => (mode === "single" ? roots.slice(0, 1) : roots), [mode, roots]);
   const canProcess = activeRoots.length > 0 && !isProcessing;
+  const latestEntries = report?.entries.slice(-160).reverse() ?? [];
 
   const addRoots = useCallback(
     (paths: string[]) => {
@@ -262,14 +265,14 @@ function App() {
         },
       });
       setReport(result);
+      setActiveTab("log");
     } catch (processError) {
       setError(processError instanceof Error ? processError.message : String(processError));
+      setActiveTab("log");
     } finally {
       setIsProcessing(false);
     }
   };
-
-  const latestEntries = report?.entries.slice(-160).reverse() ?? [];
 
   return (
     <main className="app-shell">
@@ -379,193 +382,255 @@ function App() {
               <Image size={14} />
               {copyFiles.length} 个补充文件
             </span>
-            <span className={dryRun ? "accent-warning" : "accent-ready"}>
-              {dryRun ? "预览" : "执行"}
-            </span>
+            <span>{dryRun ? "预览" : "执行"}</span>
           </div>
         </header>
 
-        <div className="content-grid">
-          <section className="panel rules-panel">
-            <div className="panel-heading">
-              <div>
-                <Settings size={18} />
-                <h3>命名规则</h3>
-              </div>
-              <select value={presetId} onChange={(event) => applyPreset(event.target.value)}>
-                {folderPresets.map((preset) => (
-                  <option key={preset.id} value={preset.id}>
-                    {preset.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+        <nav className="tabbar" aria-label="规则标签">
+          <button
+            className={activeTab === "rules" ? "active" : ""}
+            type="button"
+            onClick={() => setActiveTab("rules")}
+          >
+            <Settings size={16} />
+            命名
+          </button>
+          <button
+            className={activeTab === "mapping" ? "active" : ""}
+            type="button"
+            onClick={() => setActiveTab("mapping")}
+          >
+            <ListChecks size={16} />
+            映射
+          </button>
+          <button
+            className={activeTab === "special" ? "active" : ""}
+            type="button"
+            onClick={() => setActiveTab("special")}
+          >
+            <AlertTriangle size={16} />
+            特殊目录
+          </button>
+          <button
+            className={activeTab === "log" ? "active" : ""}
+            type="button"
+            onClick={() => setActiveTab("log")}
+          >
+            <Info size={16} />
+            日志
+          </button>
+        </nav>
 
-            <div className="folder-grid">
-              <label>
-                图像目录
-                <input
-                  value={folderNames.images}
-                  onChange={(event) => updateFolderName("images", event.target.value)}
-                />
-              </label>
-              <label>
-                视频目录
-                <input
-                  value={folderNames.videos}
-                  onChange={(event) => updateFolderName("videos", event.target.value)}
-                />
-              </label>
-              <label>
-                GIF 目录
-                <input
-                  value={folderNames.gifs}
-                  onChange={(event) => updateFolderName("gifs", event.target.value)}
-                />
-              </label>
-              <label>
-                文本目录
-                <input
-                  value={folderNames.texts}
-                  onChange={(event) => updateFolderName("texts", event.target.value)}
-                />
-              </label>
-            </div>
-
-            <div className="pattern-row">
-              <label>
-                文件名模板
-                <input value={renamePattern} onChange={(event) => setRenamePattern(event.target.value)} />
-              </label>
-              <label>
-                起始
-                <input
-                  min={1}
-                  type="number"
-                  value={startIndex}
-                  onChange={(event) => setStartIndex(Number(event.target.value))}
-                />
-              </label>
-              <label>
-                位数
-                <input
-                  min={1}
-                  max={8}
-                  type="number"
-                  value={padding}
-                  onChange={(event) => setPadding(Number(event.target.value))}
-                />
-              </label>
-            </div>
-
-            <div className="toggle-grid">
-              <label className="check-row">
-                <input
-                  checked={copyExtras}
-                  type="checkbox"
-                  onChange={(event) => setCopyExtras(event.target.checked)}
-                />
-                <span>复制补充文件到根目录</span>
-              </label>
-              <label className="check-row">
-                <input
-                  checked={includeText}
-                  type="checkbox"
-                  onChange={(event) => setIncludeText(event.target.checked)}
-                />
-                <span>TXT 参与分类</span>
-              </label>
-              <label className="check-row">
-                <input checked={dryRun} type="checkbox" onChange={(event) => setDryRun(event.target.checked)} />
-                <span>预览模式</span>
-              </label>
-            </div>
-          </section>
-
-          <section className="panel mapping-panel">
-            <div className="panel-heading">
-              <div>
-                <ListChecks size={18} />
-                <h3>目录映射</h3>
-              </div>
-              <button type="button" title="新增映射" onClick={() => setMappings((current) => [...current, { from: "", to: "图包" }])}>
-                <Plus size={16} />
-              </button>
-            </div>
-
-            <div className="mapping-list">
-              {mappings.map((mapping, index) => (
-                <div className="mapping-row" key={`${mapping.from}-${index}`}>
-                  <input
-                    value={mapping.from}
-                    placeholder="Pic"
-                    onChange={(event) => updateMapping(index, "from", event.target.value)}
-                  />
-                  <span>→</span>
-                  <input
-                    value={mapping.to}
-                    placeholder="图包"
-                    onChange={(event) => updateMapping(index, "to", event.target.value)}
-                  />
-                  <button type="button" title="删除映射" onClick={() => removeMapping(index)}>
-                    <Minus size={15} />
-                  </button>
+        <div className="tab-content">
+          {activeTab === "rules" && (
+            <section className="panel rules-panel">
+              <div className="panel-heading">
+                <div>
+                  <Settings size={18} />
+                  <h3>命名规则</h3>
                 </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="panel special-panel">
-            <div className="panel-heading">
-              <div>
-                <AlertTriangle size={18} />
-                <h3>特殊目录</h3>
+                <select value={presetId} onChange={(event) => applyPreset(event.target.value)}>
+                  {folderPresets.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.name}
+                    </option>
+                  ))}
+                </select>
               </div>
-            </div>
-            <textarea value={specialDirs} onChange={(event) => setSpecialDirs(event.target.value)} />
-          </section>
 
-          <section className="panel report-panel">
-            <div className="panel-heading">
-              <div>
-                <Info size={18} />
-                <h3>日志</h3>
+              <div className="folder-grid">
+                <label>
+                  图像目录
+                  <input
+                    value={folderNames.images}
+                    onChange={(event) => updateFolderName("images", event.target.value)}
+                  />
+                </label>
+                <label>
+                  视频目录
+                  <input
+                    value={folderNames.videos}
+                    onChange={(event) => updateFolderName("videos", event.target.value)}
+                  />
+                </label>
+                <label>
+                  GIF 目录
+                  <input
+                    value={folderNames.gifs}
+                    onChange={(event) => updateFolderName("gifs", event.target.value)}
+                  />
+                </label>
+                <label>
+                  文本目录
+                  <input
+                    value={folderNames.texts}
+                    onChange={(event) => updateFolderName("texts", event.target.value)}
+                  />
+                </label>
               </div>
-              {report?.logPath && <span className="log-path" title={report.logPath}>{shortName(report.logPath)}</span>}
-            </div>
 
-            {error && (
-              <div className="error-box">
-                <AlertTriangle size={17} />
-                {error}
+              <div className="pattern-row">
+                <label>
+                  文件名模板
+                  <input
+                    value={renamePattern}
+                    onChange={(event) => setRenamePattern(event.target.value)}
+                  />
+                </label>
+                <label>
+                  起始
+                  <input
+                    min={1}
+                    type="number"
+                    value={startIndex}
+                    onChange={(event) => setStartIndex(Number(event.target.value))}
+                  />
+                </label>
+                <label>
+                  位数
+                  <input
+                    min={1}
+                    max={8}
+                    type="number"
+                    value={padding}
+                    onChange={(event) => setPadding(Number(event.target.value))}
+                  />
+                </label>
               </div>
-            )}
 
-            {report && (
-              <div className="stats-grid">
-                <span>目录 {report.rootsProcessed}</span>
-                <span>创建 {report.foldersCreated}</span>
-                <span>映射 {report.foldersRenamed}</span>
-                <span>移动 {report.filesMoved}</span>
-                <span>重命名 {report.filesRenamed}</span>
-                <span>复制 {report.filesCopied}</span>
-                <span>跳过 {report.skipped}</span>
+              <div className="toggle-grid">
+                <label className="check-row">
+                  <input
+                    checked={copyExtras}
+                    type="checkbox"
+                    onChange={(event) => setCopyExtras(event.target.checked)}
+                  />
+                  <span>复制补充文件到根目录</span>
+                </label>
+                <label className="check-row">
+                  <input
+                    checked={includeText}
+                    type="checkbox"
+                    onChange={(event) => setIncludeText(event.target.checked)}
+                  />
+                  <span>TXT 参与分类</span>
+                </label>
+                <label className="check-row">
+                  <input
+                    checked={dryRun}
+                    type="checkbox"
+                    onChange={(event) => setDryRun(event.target.checked)}
+                  />
+                  <span>预览模式</span>
+                </label>
               </div>
-            )}
+            </section>
+          )}
 
-            <div className="log-list">
-              {latestEntries.map((entry, index) => (
-                <div className={`log-row ${entry.level}`} key={`${entry.message}-${index}`}>
-                  {entry.level === "success" ? <CheckCircle size={15} /> : entry.level === "warn" ? <AlertTriangle size={15} /> : <Info size={15} />}
-                  <div>
-                    <strong>{entry.message}</strong>
-                    {entry.path && <span>{entry.path}</span>}
+          {activeTab === "mapping" && (
+            <section className="panel mapping-panel">
+              <div className="panel-heading">
+                <div>
+                  <ListChecks size={18} />
+                  <h3>目录映射</h3>
+                </div>
+                <button
+                  type="button"
+                  title="新增映射"
+                  onClick={() => setMappings((current) => [...current, { from: "", to: "图包" }])}
+                >
+                  <Plus size={16} />
+                </button>
+              </div>
+
+              <div className="mapping-list">
+                {mappings.map((mapping, index) => (
+                  <div className="mapping-row" key={`${mapping.from}-${index}`}>
+                    <input
+                      value={mapping.from}
+                      placeholder="Pic"
+                      onChange={(event) => updateMapping(index, "from", event.target.value)}
+                    />
+                    <span>→</span>
+                    <input
+                      value={mapping.to}
+                      placeholder="图包"
+                      onChange={(event) => updateMapping(index, "to", event.target.value)}
+                    />
+                    <button type="button" title="删除映射" onClick={() => removeMapping(index)}>
+                      <Minus size={15} />
+                    </button>
                   </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {activeTab === "special" && (
+            <section className="panel special-panel">
+              <div className="panel-heading">
+                <div>
+                  <AlertTriangle size={18} />
+                  <h3>特殊目录</h3>
                 </div>
-              ))}
-              {!latestEntries.length && <div className="empty-log">等待任务</div>}
-            </div>
-          </section>
+              </div>
+              <textarea value={specialDirs} onChange={(event) => setSpecialDirs(event.target.value)} />
+            </section>
+          )}
+
+          {activeTab === "log" && (
+            <section className="panel report-panel">
+              <div className="panel-heading">
+                <div>
+                  <Info size={18} />
+                  <h3>日志</h3>
+                </div>
+                {report?.logPath && (
+                  <span className="log-path" title={report.logPath}>
+                    {shortName(report.logPath)}
+                  </span>
+                )}
+              </div>
+
+              {error && (
+                <div className="error-box">
+                  <AlertTriangle size={17} />
+                  {error}
+                </div>
+              )}
+
+              {report && (
+                <div className="stats-grid">
+                  <span>目录 {report.rootsProcessed}</span>
+                  <span>创建 {report.foldersCreated}</span>
+                  <span>映射 {report.foldersRenamed}</span>
+                  <span>移动 {report.filesMoved}</span>
+                  <span>重命名 {report.filesRenamed}</span>
+                  <span>复制 {report.filesCopied}</span>
+                  <span>跳过 {report.skipped}</span>
+                </div>
+              )}
+
+              <div className="log-list">
+                {latestEntries.map((entry, index) => (
+                  <div className={`log-row ${entry.level}`} key={`${entry.message}-${index}`}>
+                    {entry.level === "success" ? (
+                      <CheckCircle size={15} />
+                    ) : entry.level === "warn" ? (
+                      <AlertTriangle size={15} />
+                    ) : (
+                      <Info size={15} />
+                    )}
+                    <div>
+                      <strong>{entry.message}</strong>
+                      {entry.path && <span>{entry.path}</span>}
+                    </div>
+                  </div>
+                ))}
+                {!latestEntries.length && <div className="empty-log">等待任务</div>}
+              </div>
+            </section>
+          )}
         </div>
       </section>
     </main>
