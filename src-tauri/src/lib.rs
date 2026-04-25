@@ -5,7 +5,8 @@ use std::{
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
-use tauri::Manager;
+use tauri::{Manager, WindowEvent};
+use tauri_plugin_window_state::{AppHandleExt, StateFlags, WindowExt};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -74,6 +75,16 @@ enum Category {
 struct RenameOperation {
     source: PathBuf,
     target: PathBuf,
+}
+
+fn window_state_flags() -> StateFlags {
+    StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED
+}
+
+#[tauri::command]
+fn save_main_window_state(app: tauri::AppHandle) -> Result<(), String> {
+    app.save_window_state(window_state_flags())
+        .map_err(|error| format!("保存窗口状态失败：{error}"))
 }
 
 #[tauri::command]
@@ -787,22 +798,47 @@ impl ProcessReport {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(window_state_flags())
+                .build(),
+        )
         .setup(|app| {
             #[cfg(desktop)]
-            app.handle()
-                .plugin(tauri_plugin_window_state::Builder::default().build())?;
-
-            #[cfg(desktop)]
             if let Some(window) = app.get_webview_window("main") {
+                window.restore_state(window_state_flags())?;
                 window.show()?;
                 window.set_focus()?;
+                let _ = app.handle().save_window_state(window_state_flags());
             }
 
             Ok(())
         })
+        .on_window_event(|window, event| {
+            if window.label() != "main" {
+                return;
+            }
+
+            match event {
+                WindowEvent::Moved(_)
+                | WindowEvent::Resized(_)
+                | WindowEvent::CloseRequested { .. } => {
+                    let app = window.app_handle();
+                    let _ = app.save_window_state(window_state_flags());
+
+                    if matches!(event, WindowEvent::CloseRequested { .. }) {
+                        app.exit(0);
+                    }
+                }
+                _ => {}
+            }
+        })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![process_rename])
+        .invoke_handler(tauri::generate_handler![
+            process_rename,
+            save_main_window_state
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
