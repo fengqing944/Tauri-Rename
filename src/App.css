@@ -783,30 +783,22 @@ label {
 
 .log-row {
   display: grid;
-  grid-template-columns: 58px minmax(0, 1fr);
-  gap: 10px;
-  min-height: 38px;
-  align-items: center;
-  padding: 7px 10px;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 12px;
+  min-height: 58px;
+  align-items: start;
+  padding: 11px 12px;
   background: #ffffff;
-  border-bottom: 1px solid #eceef1;
-}
-
-.log-row:first-child {
-  border-radius: 7px 7px 0 0;
-}
-
-.log-row:last-child {
-  border-bottom: 0;
-  border-radius: 0 0 7px 7px;
+  border: 1px solid #e1e4e8;
+  border-radius: 7px;
 }
 
 .log-list {
-  gap: 0;
-  padding: 0;
-  background: #ffffff;
-  border: 1px solid #d7d9dd;
-  border-radius: 7px;
+  gap: 8px;
+  padding: 2px 8px 10px 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   scrollbar-gutter: stable;
 }
 
@@ -820,8 +812,9 @@ label {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 24px;
-  padding: 0 8px;
+  min-height: 28px;
+  margin-top: 2px;
+  padding: 0 10px;
   color: #4c535d;
   background: #f4f5f6;
   border: 1px solid #d7d9dd;
@@ -845,6 +838,7 @@ label {
 
 .log-content {
   min-width: 0;
+  padding-top: 1px;
 }
 
 .log-content strong {
@@ -852,6 +846,7 @@ label {
   overflow: hidden;
   color: #33373d;
   font-size: 13px;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -859,9 +854,10 @@ label {
 .log-content span {
   display: block;
   overflow: hidden;
-  margin-top: 2px;
+  margin-top: 6px;
   color: #70757d;
   font-size: 12px;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
