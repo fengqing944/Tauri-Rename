@@ -1,5 +1,5 @@
 [package]
-name = "tauri-rename"
+name = "rename-studio"
 version = "0.1.0"
 description = "A desktop batch renaming and auto-classification tool."
 authors = ["fengqing944"]
