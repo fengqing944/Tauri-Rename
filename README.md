@@ -1,71 +1,134 @@
-# Tauri Rename / Rename Studio
+# Rename Studio
 
-## 中文
+一款基于 Tauri 2 的桌面批量重命名与自动分类工具。
 
-Rename Studio 是一个基于 Tauri 2 的桌面批量整理工具，用于文件夹自动分类、目录映射、文件移动、复制补充文件和安全重命名。
+适合整理图片、视频、GIF、文本等文件，支持单文件夹与多文件夹批量处理，并提供目录映射、特殊目录、补充文件复制、倒序重命名、日志记录和窗口状态恢复。
 
-### 功能
+## 项目状态
 
-- 支持拖拽文件夹到窗口中。
-- 支持单文件夹模式和多文件夹模式。
-- 自动按文件类型创建分类目录，例如图包、视频、GIF、文本。
-- 支持目录映射，例如将 `Pic`、`Images` 等目录映射为 `图包`。
-- 支持特殊目录，这些目录只做重命名，不移动到分类目录中。
-- 支持复制补充文件，图片、GIF、TXT 会复制到处理根目录。
-- 补充文件、命名模板、目录映射、特殊目录、勾选项等设置会自动保存。
-- 支持倒序重命名，适合最后一张才是开头的图包。
-- 支持预览模式，执行前查看将要发生的操作。
-- 应用内显示简洁日志，并将日志文件写入应用日志目录。
-- 自动恢复上次窗口大小和位置。
+| 项目 | 说明 |
+| --- | --- |
+| 应用类型 | 桌面工具 |
+| 技术栈 | Tauri 2、React、TypeScript、Rust |
+| 默认排序 | Windows 风格自然排序 |
+| 支持平台 | Windows |
+| 当前版本 | 0.1.0 |
 
-### 日志位置
+## 核心功能
 
-处理完成后，日志页会显示本次日志文件的完整路径。日志写入 Tauri 的应用日志目录，不会放到你正在处理的文件夹中。
+- **拖拽导入**：直接将文件夹拖入窗口，也可以通过按钮选择目录。
+- **处理模式**：支持单文件夹模式与多文件夹批量模式。
+- **自动分类**：根据文件类型自动创建分类目录，例如图包、视频、GIF、文本。
+- **目录映射**：可将已有目录名映射为目标目录名，例如 `Pic` 映射为 `图包`。
+- **特殊目录**：指定目录只在原位置重命名，不移动到分类目录中。
+- **补充文件**：支持把指定图片、GIF 或 TXT 文件复制到处理根目录。
+- **命名模板**：可通过模板控制重命名规则、起始序号和补零位数。
+- **倒序重命名**：适合“最后一张才是开头”的图包整理场景。
+- **设置保存**：补充文件、命名模板、目录映射、特殊目录和勾选项会自动保存。
+- **日志记录**：应用内显示处理结果，并将日志写入应用日志目录。
+- **窗口状态**：自动恢复上次关闭前的窗口大小和位置。
 
-### 开发
+## 排序规则
+
+Rename Studio 默认使用接近 Windows 资源管理器的自然排序。
+
+例如：
+
+```text
+1 (1).jpg
+1 (2).jpg
+1 (9).jpg
+1 (10).jpg
+1 (34).jpg
+```
+
+这类文件会按数字大小排序，而不是按普通字符串排序。
+
+如果启用倒序重命名，则会先按自然排序得到正确顺序，再整体反转，因此最后一张可以被重命名为 `01`。
+
+## 处理流程
+
+1. 添加一个或多个待处理文件夹。
+2. 根据需要设置分类目录、命名模板、目录映射和特殊目录。
+3. 可选择补充文件，并决定是否复制到处理根目录。
+4. 点击执行后，应用会自动分类、移动文件、复制补充文件并执行安全重命名。
+5. 处理结束后，在日志页查看本次结果和日志文件位置。
+
+## 文件分类
+
+| 类型 | 默认目录 | 常见扩展名 |
+| --- | --- | --- |
+| 图片 | 图包 | jpg、jpeg、png、webp、bmp、tif、tiff、avif、heic、heif |
+| 视频 | 视频 | mp4、mov、mkv、avi、wmv、m4v、webm、flv、ts、m2ts |
+| GIF | GIF | gif |
+| 文本 | 文本 | txt、md、nfo |
+
+文本分类可在界面中开关控制。
+
+## 日志与数据位置
+
+日志文件不会写入正在处理的文件夹，而是写入应用日志目录。
+
+处理完成后，日志页会显示本次日志文件的完整路径。
+
+常见位置：
+
+```text
+C:\Users\<用户名>\AppData\Local\com.fengqing.rename\logs
+```
+
+窗口状态、界面设置等应用数据由 Tauri 存放在系统应用目录中。
+
+## 安全策略
+
+- 重命名前会使用临时文件名分阶段处理，降低文件名冲突风险。
+- 目标文件名已存在时会自动生成不冲突的文件名。
+- 补充文件采用复制方式，不会移动原文件。
+- 特殊目录只做原地重命名，不参与分类移动。
+- 可使用预览模式先查看将要执行的操作。
+
+## 开发环境
+
+需要提前安装：
+
+- Node.js
+- Rust
+- Tauri 2 所需的 Windows 开发环境
+
+安装依赖：
 
 ```bash
 npm install
+```
+
+启动开发模式：
+
+```bash
 npm run tauri dev
 ```
 
-### 构建
+构建应用：
 
 ```bash
 npm run tauri build
 ```
 
-## English
+构建完成后，安装包会生成在：
 
-Rename Studio is a Tauri 2 desktop batch organization tool for automatic file classification, directory mapping, file moving, supplemental file copying, and safe renaming.
-
-### Features
-
-- Drag folders into the app window.
-- Switch between single-folder and multi-folder processing.
-- Automatically create category folders for images, videos, GIFs, and text files.
-- Map existing folders, for example `Pic` or `Images` to `图包`.
-- Mark special folders so their files are renamed in place without being moved.
-- Copy selected supplemental image, GIF, or TXT files into the processed root folder.
-- Persist supplemental files, rename templates, directory mappings, special folders, toggles, and numbering settings.
-- Reverse rename order for packs where the last file should become the first numbered file.
-- Preview operations before applying them.
-- Show concise logs in the app and write log files to the app log directory.
-- Restore the previous window size and position on launch.
-
-### Log Files
-
-After processing, the log tab shows the full path of the generated log file. Logs are written to Tauri's app log directory and are not stored inside the folder being processed.
-
-### Development
-
-```bash
-npm install
-npm run tauri dev
+```text
+src-tauri\target\release\bundle
 ```
 
-### Build
+## 常用命令
 
-```bash
-npm run tauri build
-```
+| 命令 | 用途 |
+| --- | --- |
+| `npm run build` | 构建前端资源 |
+| `npm run tauri dev` | 启动 Tauri 开发模式 |
+| `npm run tauri build` | 打包桌面应用 |
+| `cargo check` | 检查 Rust 代码 |
+| `cargo test` | 运行 Rust 测试 |
+
+## 许可证
+
+当前仓库未声明许可证。如需公开分发或协作开发，建议补充许可证文件。
