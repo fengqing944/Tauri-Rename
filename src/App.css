@@ -674,24 +674,45 @@ label {
   font-size: 13px;
 }
 
-.result-line {
-  min-height: 40px;
+.result-summary {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(280px, 0.9fr);
+  gap: 12px;
   margin-bottom: 10px;
-  padding: 10px 12px;
-  color: #22252a;
+  padding: 12px;
   background: #f8f9fa;
   border: 1px solid #e1e4e8;
   border-radius: 7px;
+}
+
+.result-copy {
+  min-width: 0;
+}
+
+.result-copy span {
+  display: block;
+  margin-bottom: 5px;
+  color: #70757d;
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.result-copy strong {
+  display: block;
+  color: #22252a;
   font-size: 14px;
+  font-weight: 720;
+  line-height: 1.45;
 }
 
 .log-file-line {
   display: grid;
   grid-template-columns: 72px minmax(0, 1fr);
   gap: 10px;
-  align-items: start;
+  align-items: center;
+  min-height: 36px;
   margin-bottom: 10px;
-  padding: 9px 12px;
+  padding: 8px 12px;
   color: #33373d;
   background: #ffffff;
   border: 1px solid #d7d9dd;
@@ -706,15 +727,16 @@ label {
 
 .log-file-line strong {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow: hidden;
   font-weight: 520;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
-  margin-bottom: 10px;
 }
 
 .stats-grid span {
@@ -727,6 +749,23 @@ label {
   border-radius: 7px;
   font-size: 13px;
   font-weight: 720;
+}
+
+.log-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 2px 0 8px;
+  color: #59606a;
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.log-section-title small {
+  color: #70757d;
+  font-size: 12px;
+  font-weight: 620;
 }
 
 .error-box {
@@ -744,33 +783,71 @@ label {
 
 .log-row {
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr);
-  gap: 8px;
-  min-height: 40px;
-  padding: 8px 10px;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 10px;
+  min-height: 38px;
+  align-items: center;
+  padding: 7px 10px;
   background: #ffffff;
-  border: 1px solid #e1e4e8;
-  border-left-width: 3px;
+  border-bottom: 1px solid #eceef1;
+}
+
+.log-row:first-child {
+  border-radius: 7px 7px 0 0;
+}
+
+.log-row:last-child {
+  border-bottom: 0;
+  border-radius: 0 0 7px 7px;
+}
+
+.log-list {
+  gap: 0;
+  padding: 0;
+  background: #ffffff;
+  border: 1px solid #d7d9dd;
   border-radius: 7px;
+  scrollbar-gutter: stable;
 }
 
-.log-row svg {
-  margin-top: 2px;
+.log-list .empty-log {
+  min-height: 120px;
+  border: 0;
+  border-radius: 0;
 }
 
-.log-row > div {
+.log-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0 8px;
+  color: #4c535d;
+  background: #f4f5f6;
+  border: 1px solid #d7d9dd;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 720;
+  white-space: nowrap;
+}
+
+.log-row.success .log-status {
+  color: #22252a;
+  background: #f8f9fa;
+  border-color: #c7cbd1;
+}
+
+.log-row.warn .log-status {
+  color: #22252a;
+  background: #ffffff;
+  border-color: #9ca3af;
+}
+
+.log-content {
   min-width: 0;
 }
 
-.log-row.success {
-  border-left-color: #59606a;
-}
-
-.log-row.warn {
-  border-left-color: #9ca3af;
-}
-
-.log-row strong {
+.log-content strong {
   display: block;
   overflow: hidden;
   color: #33373d;
@@ -779,7 +856,7 @@ label {
   white-space: nowrap;
 }
 
-.log-row span {
+.log-content span {
   display: block;
   overflow: hidden;
   margin-top: 2px;
@@ -815,6 +892,10 @@ label {
 
   .mapping-tools .search-field {
     grid-column: 1 / -1;
+  }
+
+  .result-summary {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

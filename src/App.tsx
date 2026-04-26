@@ -4,7 +4,6 @@ import { open } from "@tauri-apps/plugin-dialog";
 import {
   AlertTriangle,
   ArrowDownUp,
-  CheckCircle,
   Copy,
   FilePlus,
   FolderOpen,
@@ -338,7 +337,8 @@ function App() {
     [mappingDraft.from, mappings],
   );
 
-  const latestEntries = report?.entries.slice(-80).reverse() ?? [];
+  const visibleLogEntries = report?.entries.slice(-120) ?? [];
+  const hiddenLogCount = Math.max((report?.entries.length ?? 0) - visibleLogEntries.length, 0);
 
   useEffect(() => {
     writePersistedSettings({
@@ -1016,42 +1016,52 @@ function App() {
 
               {report && (
                 <>
-                  <div className="result-line">
-                    已处理 {report.rootsProcessed} 个目录，移动 {report.filesMoved} 个文件，重命名{" "}
-                    {report.filesRenamed} 个文件。
+                  <div className="result-summary">
+                    <div className="result-copy">
+                      <span>本次结果</span>
+                      <strong>
+                        已处理 {report.rootsProcessed} 个目录，移动 {report.filesMoved} 个文件，重命名{" "}
+                        {report.filesRenamed} 个文件。
+                      </strong>
+                    </div>
+                    <div className="stats-grid">
+                      <span>创建 {report.foldersCreated}</span>
+                      <span>映射 {report.foldersRenamed}</span>
+                      <span>复制 {report.filesCopied}</span>
+                      <span>跳过 {report.skipped}</span>
+                    </div>
                   </div>
                   {report.logPath && (
                     <div className="log-file-line" title={report.logPath}>
-                      <span>日志文件</span>
+                      <span>保存位置</span>
                       <strong>{report.logPath}</strong>
                     </div>
                   )}
-                  <div className="stats-grid">
-                    <span>创建 {report.foldersCreated}</span>
-                    <span>映射 {report.foldersRenamed}</span>
-                    <span>复制 {report.filesCopied}</span>
-                    <span>跳过 {report.skipped}</span>
-                  </div>
                 </>
               )}
 
+              <div className="log-section-title">
+                <span>操作明细</span>
+                {report && (
+                  <small>
+                    {hiddenLogCount > 0 ? `最近 ${visibleLogEntries.length} 条` : `${visibleLogEntries.length} 条`}
+                  </small>
+                )}
+              </div>
+
               <div className="log-list">
-                {latestEntries.map((entry, index) => (
+                {visibleLogEntries.map((entry, index) => (
                   <div className={`log-row ${entry.level}`} key={`${entry.message}-${index}`}>
-                    {entry.level === "success" ? (
-                      <CheckCircle size={15} />
-                    ) : entry.level === "warn" ? (
-                      <AlertTriangle size={15} />
-                    ) : (
-                      <Info size={15} />
-                    )}
-                    <div>
+                    <span className="log-status">
+                      {entry.level === "success" ? "完成" : entry.level === "warn" ? "注意" : "信息"}
+                    </span>
+                    <div className="log-content">
                       <strong>{entry.message}</strong>
                       {entry.path && <span title={entry.path}>{shortName(entry.path)}</span>}
                     </div>
                   </div>
                 ))}
-                {!latestEntries.length && <div className="empty-log">等待任务</div>}
+                {!visibleLogEntries.length && <div className="empty-log">等待任务</div>}
               </div>
             </section>
           )}
