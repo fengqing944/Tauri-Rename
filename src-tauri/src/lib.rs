@@ -4,6 +4,10 @@ use std::{
     collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
+    sync::{
+        atomic::{AtomicBool, Ordering as AtomicOrdering},
+        Arc,
+    },
     time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{Manager, WindowEvent};
@@ -78,8 +82,74 @@ struct RenameOperation {
     target: PathBuf,
 }
 
+#[derive(Default)]
+struct AppRuntimeState {
+    close_to_tray: AtomicBool,
+}
+
 fn window_state_flags() -> StateFlags {
     StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED
+}
+
+fn show_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
+fn exit_app(app: &tauri::AppHandle) {
+    let _ = app.save_window_state(window_state_flags());
+    app.exit(0);
+}
+
+#[cfg(desktop)]
+fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
+    use tauri::{
+        menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem},
+        tray::{MouseButton, TrayIconBuilder, TrayIconEvent},
+    };
+
+    let show_item = MenuItemBuilder::with_id("show", "显示").build(app)?;
+    let exit_item = MenuItemBuilder::with_id("exit", "退出").build(app)?;
+    let separator = PredefinedMenuItem::separator(app)?;
+    let menu = MenuBuilder::new(app)
+        .items(&[&show_item, &separator, &exit_item])
+        .build()?;
+
+    let mut tray = TrayIconBuilder::with_id("rename-studio-tray")
+        .tooltip("Rename Studio")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "show" => show_main_window(app),
+            "exit" => exit_app(app),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::DoubleClick {
+                button: MouseButton::Left,
+                ..
+            } = event
+            {
+                show_main_window(tray.app_handle());
+            }
+        });
+
+    if let Some(icon) = app.default_window_icon().cloned() {
+        tray = tray.icon(icon);
+    }
+
+    tray.build(app)?;
+    Ok(())
+}
+
+#[tauri::command]
+fn set_close_to_tray_enabled(app: tauri::AppHandle, enabled: bool) {
+    app.state::<Arc<AppRuntimeState>>()
+        .close_to_tray
+        .store(enabled, AtomicOrdering::Relaxed);
 }
 
 #[tauri::command]
@@ -878,6 +948,7 @@ impl ProcessReport {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(Arc::new(AppRuntimeState::default()))
         .plugin(
             tauri_plugin_window_state::Builder::default()
                 .with_state_flags(window_state_flags())
@@ -891,6 +962,9 @@ pub fn run() {
                 window.set_focus()?;
                 let _ = app.handle().save_window_state(window_state_flags());
             }
+
+            #[cfg(desktop)]
+            setup_tray(app)?;
 
             Ok(())
         })
@@ -906,8 +980,17 @@ pub fn run() {
                     let app = window.app_handle();
                     let _ = app.save_window_state(window_state_flags());
 
-                    if matches!(event, WindowEvent::CloseRequested { .. }) {
-                        app.exit(0);
+                    if let WindowEvent::CloseRequested { api, .. } = event {
+                        if app
+                            .state::<Arc<AppRuntimeState>>()
+                            .close_to_tray
+                            .load(AtomicOrdering::Relaxed)
+                        {
+                            api.prevent_close();
+                            let _ = window.hide();
+                        } else {
+                            app.exit(0);
+                        }
                     }
                 }
                 _ => {}
@@ -917,6 +1000,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             process_rename,
+            set_close_to_tray_enabled,
             save_main_window_state
         ])
         .run(tauri::generate_context!())

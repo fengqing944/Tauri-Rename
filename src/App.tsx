@@ -74,6 +74,7 @@ type PersistedSettings = {
   includeText?: boolean;
   dryRun?: boolean;
   reverseRenameOrder?: boolean;
+  closeToTray?: boolean;
   renamePattern?: string;
   startIndex?: number;
   padding?: number;
@@ -285,6 +286,7 @@ function App() {
   const [reverseRenameOrder, setReverseRenameOrder] = useState(
     () => savedSettings.reverseRenameOrder === true,
   );
+  const [closeToTray, setCloseToTray] = useState(() => savedSettings.closeToTray === true);
   const [renamePattern, setRenamePattern] = useState(() =>
     typeof savedSettings.renamePattern === "string" && savedSettings.renamePattern.trim()
       ? savedSettings.renamePattern
@@ -353,6 +355,7 @@ function App() {
       includeText,
       dryRun,
       reverseRenameOrder,
+      closeToTray,
       renamePattern,
       startIndex,
       padding,
@@ -368,10 +371,15 @@ function App() {
     includeText,
     dryRun,
     reverseRenameOrder,
+    closeToTray,
     renamePattern,
     startIndex,
     padding,
   ]);
+
+  useEffect(() => {
+    invoke("set_close_to_tray_enabled", { enabled: closeToTray }).catch(() => undefined);
+  }, [closeToTray]);
 
   const addRoots = useCallback(
     (paths: string[]) => {
@@ -713,6 +721,7 @@ function App() {
             </span>
             <span>{dryRun ? "预览" : "执行"}</span>
             {reverseRenameOrder && <span>倒序</span>}
+            {closeToTray && <span>托盘</span>}
           </div>
         </header>
 
@@ -863,6 +872,14 @@ function App() {
                     <ArrowDownUp size={14} />
                     倒序重命名
                   </span>
+                </label>
+                <label className="check-row">
+                  <input
+                    checked={closeToTray}
+                    type="checkbox"
+                    onChange={(event) => setCloseToTray(event.target.checked)}
+                  />
+                  <span>关闭窗口时最小化到托盘</span>
                 </label>
               </div>
             </section>
