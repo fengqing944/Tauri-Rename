@@ -106,6 +106,7 @@ button {
 
 .mode-switch button,
 .primary-action,
+.secondary-action,
 .ghost-action,
 .run-button,
 .panel-heading button,
@@ -164,6 +165,7 @@ button {
 }
 
 .primary-action,
+.secondary-action,
 .ghost-action,
 .run-button,
 .icon-text-button {
@@ -182,13 +184,26 @@ button {
   width: 100%;
 }
 
+.drop-actions {
+  display: grid;
+  width: 100%;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 .primary-action {
   min-height: 38px;
-  margin-top: 8px;
 }
 
 .ghost-action {
   color: #22252a;
+  background: #ffffff;
+}
+
+.secondary-action {
+  width: 100%;
+  min-height: 34px;
+  color: #33373d;
   background: #ffffff;
 }
 
@@ -199,6 +214,7 @@ button {
 }
 
 .ghost-action:hover,
+.secondary-action:hover,
 .mode-switch button:hover,
 .panel-heading button:hover,
 .path-row button:hover,
