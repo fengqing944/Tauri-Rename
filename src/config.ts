@@ -32,7 +32,7 @@ export const defaultMappings: DirectoryMapping[] = [
   { from: "Gif", to: "GIF" },
   { from: "GIFs", to: "GIF" },
   { from: "Text", to: "文本" },
-  { from: "TXT", to: "文本" },
+  { from: "TXT", to: "图包" },
 ];
 
 export const copyableExtensions = [

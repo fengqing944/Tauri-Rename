@@ -91,6 +91,9 @@ pub(crate) fn compare_windows_like_text(left: &str, right: &str) -> Ordering {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(windows)]
+    use std::{env, fs, process::Command};
+
     use super::*;
 
     #[test]
@@ -125,5 +128,33 @@ mod tests {
         names.reverse();
 
         assert_eq!(names, vec!["99.jpg", "10.jpg", "2.jpg", "1.jpg"]);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn read_dir_sorted_includes_hidden_files() {
+        let dir = env::temp_dir().join(format!("rename-studio-hidden-{}", std::process::id()));
+        let file = dir.join("hidden.txt");
+
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(&file, "hidden").unwrap();
+
+        let hide_status = Command::new("attrib")
+            .arg("+h")
+            .arg(&file)
+            .status()
+            .unwrap();
+        let names = read_dir_sorted(&dir)
+            .unwrap()
+            .into_iter()
+            .map(|entry| entry.file_name().to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+
+        let _ = Command::new("attrib").arg("-h").arg(&file).status();
+        let _ = fs::remove_file(&file);
+        let _ = fs::remove_dir(&dir);
+
+        assert!(hide_status.success());
+        assert!(names.contains(&"hidden.txt".to_string()));
     }
 }

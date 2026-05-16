@@ -5,8 +5,8 @@ use std::{
 };
 
 use crate::{
-    classification::{category_folder_name, category_for_path, is_copyable_extra},
-    models::{Category, DirectoryMapping, ProcessRequest, RenameOperation},
+    classification::{category_folder_name, category_for_path, is_copyable_extra, is_txt_file},
+    models::{Category, DirectoryMapping, FolderNames, ProcessRequest, RenameOperation},
     naming::{build_file_name, unique_path},
     report::{write_log_file, ProcessReport},
     sorting::{compare_paths_windows_like, read_dir_sorted},
@@ -72,7 +72,7 @@ fn process_root(
 
     let mut loose_files: HashMap<Category, Vec<PathBuf>> = HashMap::new();
     let mut special_directories = Vec::new();
-    let copy_file_names = copy_extra_file_names(request);
+    let protected_file_names = copy_extra_file_names(request);
 
     for entry in read_dir_sorted(root)? {
         let path = entry.path();
@@ -89,8 +89,8 @@ fn process_root(
                 continue;
             }
 
-            if is_selected_copy_extra(&path, &copy_file_names) {
-                report.info("补充文件保留在根目录。", Some(&path));
+            if is_selected_copy_extra(&path, &protected_file_names) {
+                report.info("补充文件保留，不参与自动分类。", Some(&path));
                 continue;
             }
 
@@ -117,6 +117,7 @@ fn process_root(
             None,
             request,
             report,
+            &protected_file_names,
         )?;
     }
 
@@ -169,6 +170,7 @@ fn process_root(
                 Some(category),
                 request,
                 report,
+                &protected_file_names,
             )?;
         }
     }
@@ -276,6 +278,7 @@ fn rename_files_in_place(
     category_filter: Option<Category>,
     request: &ProcessRequest,
     report: &mut ProcessReport,
+    protected_file_names: &HashSet<String>,
 ) -> Result<(), String> {
     if !directory.exists() {
         return Ok(());
@@ -292,6 +295,11 @@ fn rename_files_in_place(
     let mut index = request.start_index;
     for file in files {
         if is_tool_log(&file) {
+            continue;
+        }
+
+        if is_selected_copy_extra(&file, protected_file_names) {
+            report.info("补充文件保留，不参与重命名。", Some(&file));
             continue;
         }
 
@@ -396,12 +404,17 @@ fn copy_extra_files(
         let file_name = source
             .file_name()
             .ok_or_else(|| format!("无法读取补充文件名：{}", source.display()))?;
-        let destination = root.join(file_name);
+        let destination_dir = copy_extra_destination_dir(root, &source, &request.folder_names);
+        let destination = destination_dir.join(file_name);
+
+        if destination_dir != root && (request.dry_run || !destination.exists()) {
+            ensure_dir(&destination_dir, request.dry_run, report)?;
+        }
 
         if request.dry_run {
-            report.info("预览：将复制补充文件到根目录。", Some(&source));
+            report.info("预览：将复制补充文件。", Some(&source));
         } else if destination.exists() {
-            report.info("补充文件已在根目录，未重复复制。", Some(&destination));
+            report.info("补充文件已存在，未重复复制。", Some(&destination));
             continue;
         } else {
             fs::copy(&source, &destination).map_err(|error| {
@@ -414,10 +427,22 @@ fn copy_extra_files(
         }
 
         report.files_copied += 1;
-        report.success("已复制补充文件到根目录。", Some(&destination));
+        if is_txt_file(&source) {
+            report.success("已复制 TXT 补充文件到图包。", Some(&destination));
+        } else {
+            report.success("已复制补充文件到根目录。", Some(&destination));
+        }
     }
 
     Ok(())
+}
+
+fn copy_extra_destination_dir(root: &Path, source: &Path, folder_names: &FolderNames) -> PathBuf {
+    if is_txt_file(source) {
+        root.join(category_folder_name(Category::Images, folder_names))
+    } else {
+        root.to_path_buf()
+    }
 }
 
 fn copy_extra_file_names(request: &ProcessRequest) -> HashSet<String> {

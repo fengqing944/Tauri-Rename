@@ -12,7 +12,8 @@ pub(crate) fn category_for_path(path: &Path, include_text: bool) -> Option<Categ
         "mp4" | "mov" | "mkv" | "avi" | "wmv" | "m4v" | "webm" | "flv" | "ts" | "m2ts" => {
             Some(Category::Videos)
         }
-        "txt" | "md" | "nfo" if include_text => Some(Category::Texts),
+        "txt" => Some(Category::Images),
+        "md" | "nfo" if include_text => Some(Category::Texts),
         _ => None,
     }
 }
@@ -36,6 +37,15 @@ pub(crate) fn is_copyable_extra(path: &Path) -> bool {
                 | "gif"
                 | "txt"
         )
+    )
+}
+
+pub(crate) fn is_txt_file(path: &Path) -> bool {
+    matches!(
+        path.extension()
+            .map(|ext| ext.to_string_lossy().to_lowercase())
+            .as_deref(),
+        Some("txt")
     )
 }
 
@@ -74,10 +84,25 @@ mod tests {
     }
 
     #[test]
-    fn txt_only_joins_classification_when_enabled() {
-        assert_eq!(category_for_path(Path::new("notes.txt"), false), None);
+    fn txt_always_joins_image_package() {
+        assert_eq!(
+            category_for_path(Path::new("notes.txt"), false),
+            Some(Category::Images)
+        );
         assert_eq!(
             category_for_path(Path::new("notes.txt"), true),
+            Some(Category::Images)
+        );
+    }
+
+    #[test]
+    fn md_and_nfo_still_use_text_category_when_enabled() {
+        assert_eq!(
+            category_for_path(Path::new("readme.nfo"), true),
+            Some(Category::Texts)
+        );
+        assert_eq!(
+            category_for_path(Path::new("readme.md"), true),
             Some(Category::Texts)
         );
     }

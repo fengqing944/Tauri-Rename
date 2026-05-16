@@ -92,7 +92,7 @@ export function cleanMappings(value: unknown): DirectoryMapping[] {
     if (!from || !to || seen.has(key)) return [];
 
     seen.add(key);
-    return [{ from, to }];
+    return [{ from, to: key === "txt" && normalizeKey(to) === "文本" ? "图包" : to }];
   });
 
   return mappings.length ? sortMappings(mappings) : sortMappings(defaultMappings);

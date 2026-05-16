@@ -86,7 +86,7 @@ export function RulesPanel({
           />
         </label>
         <label>
-          文本目录
+          MD/NFO 目录
           <input
             value={folderNames.texts}
             onChange={(event) => onFolderNameChange("texts", event.target.value)}
@@ -130,7 +130,7 @@ export function RulesPanel({
             type="checkbox"
             onChange={(event) => onCopyExtrasChange(event.target.checked)}
           />
-          <span>复制补充文件到根目录</span>
+          <span>复制补充文件</span>
         </label>
         <label className="check-row">
           <input
@@ -138,7 +138,7 @@ export function RulesPanel({
             type="checkbox"
             onChange={(event) => onIncludeTextChange(event.target.checked)}
           />
-          <span>TXT 参与分类</span>
+          <span>MD/NFO 参与分类</span>
         </label>
         <label className="check-row">
           <input
