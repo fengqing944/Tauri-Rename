@@ -1,5 +1,5 @@
 import { defaultMappings } from "./config";
-import type { DirectoryMapping, FolderNames, Mode, ProcessingMode } from "./types";
+import type { DirectoryMapping, FolderNames, Mode } from "./types";
 
 export function normalizeSelection(selection: string | string[] | null): string[] {
   if (!selection) return [];
@@ -62,10 +62,6 @@ export function findDuplicateMappingKeys(mappings: DirectoryMapping[]): Set<stri
 
 export function isMode(value: unknown): value is Mode {
   return value === "single" || value === "batch";
-}
-
-export function isProcessingMode(value: unknown): value is ProcessingMode {
-  return value === "organize" || value === "renameOnly";
 }
 
 export function isFolderNames(value: unknown): value is FolderNames {

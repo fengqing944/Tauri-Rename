@@ -1,5 +1,4 @@
 import { FolderOpen, Image } from "lucide-react";
-import type { ProcessingMode } from "../types";
 
 type TopbarProps = {
   rootCount: number;
@@ -7,7 +6,6 @@ type TopbarProps = {
   dryRun: boolean;
   reverseRenameOrder: boolean;
   closeToTray: boolean;
-  processingMode: ProcessingMode;
 };
 
 export function Topbar({
@@ -16,7 +14,6 @@ export function Topbar({
   dryRun,
   reverseRenameOrder,
   closeToTray,
-  processingMode,
 }: TopbarProps) {
   return (
     <header className="topbar">
@@ -33,7 +30,6 @@ export function Topbar({
           <Image size={14} />
           {copyFileCount} 个补充文件
         </span>
-        <span>{processingMode === "renameOnly" ? "只重命名" : "标准整理"}</span>
         <span>{dryRun ? "预览" : "执行"}</span>
         {reverseRenameOrder && <span>倒序</span>}
         {closeToTray && <span>托盘</span>}

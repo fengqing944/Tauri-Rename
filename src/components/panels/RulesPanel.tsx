@@ -1,11 +1,10 @@
 import { ArrowDownUp, Settings } from "lucide-react";
 import { folderPresets } from "../../config";
-import type { FolderNames, ProcessingMode } from "../../types";
+import type { FolderNames } from "../../types";
 
 type RulesPanelProps = {
   presetId: string;
   folderNames: FolderNames;
-  processingMode: ProcessingMode;
   renamePattern: string;
   startIndex: number;
   padding: number;
@@ -15,7 +14,6 @@ type RulesPanelProps = {
   reverseRenameOrder: boolean;
   closeToTray: boolean;
   onApplyPreset: (id: string) => void;
-  onProcessingModeChange: (mode: ProcessingMode) => void;
   onFolderNameChange: (key: keyof FolderNames, value: string) => void;
   onRenamePatternChange: (value: string) => void;
   onStartIndexChange: (value: number) => void;
@@ -30,7 +28,6 @@ type RulesPanelProps = {
 export function RulesPanel({
   presetId,
   folderNames,
-  processingMode,
   renamePattern,
   startIndex,
   padding,
@@ -40,7 +37,6 @@ export function RulesPanel({
   reverseRenameOrder,
   closeToTray,
   onApplyPreset,
-  onProcessingModeChange,
   onFolderNameChange,
   onRenamePatternChange,
   onStartIndexChange,
@@ -65,19 +61,6 @@ export function RulesPanel({
             </option>
           ))}
         </select>
-      </div>
-
-      <div className="method-row">
-        <label>
-          处理方式
-          <select
-            value={processingMode}
-            onChange={(event) => onProcessingModeChange(event.target.value as ProcessingMode)}
-          >
-            <option value="organize">标准整理</option>
-            <option value="renameOnly">只重命名，不移动</option>
-          </select>
-        </label>
       </div>
 
       <div className="folder-grid">

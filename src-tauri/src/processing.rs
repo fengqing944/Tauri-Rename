@@ -6,9 +6,7 @@ use std::{
 
 use crate::{
     classification::{category_folder_name, category_for_path, is_copyable_extra, is_txt_file},
-    models::{
-        Category, DirectoryMapping, FolderNames, ProcessRequest, ProcessingMode, RenameOperation,
-    },
+    models::{Category, DirectoryMapping, FolderNames, ProcessRequest, RenameOperation},
     naming::{build_file_name, unique_path},
     report::{write_log_file, ProcessReport},
     sorting::{compare_paths_windows_like, read_dir_sorted},
@@ -70,22 +68,11 @@ fn process_root(
         .unwrap_or_else(|| "folder".to_string());
 
     report.info("开始处理文件夹。", Some(root));
-    let protected_file_names = copy_extra_file_names(request);
-
-    if request.processing_mode == ProcessingMode::RenameOnly {
-        report.info("只重命名模式：不移动文件，不修改目录结构。", Some(root));
-        if request.copy_extras && !request.copy_files.is_empty() {
-            report.info("只重命名模式：补充文件不会复制。", Some(root));
-        }
-        rename_supported_files_in_place(root, &root_name, request, report, &protected_file_names)?;
-        report.success("文件夹处理完成。", Some(root));
-        return Ok(());
-    }
-
     apply_directory_mappings(root, mappings, request.dry_run, report)?;
 
     let mut loose_files: HashMap<Category, Vec<PathBuf>> = HashMap::new();
     let mut special_directories = Vec::new();
+    let protected_file_names = copy_extra_file_names(request);
 
     for entry in read_dir_sorted(root)? {
         let path = entry.path();
@@ -349,88 +336,11 @@ fn rename_files_in_place(
         });
     }
 
-    apply_rename_operations(operations, request.dry_run, report)
-}
-
-fn rename_supported_files_in_place(
-    directory: &Path,
-    root_name: &str,
-    request: &ProcessRequest,
-    report: &mut ProcessReport,
-    protected_file_names: &HashSet<String>,
-) -> Result<(), String> {
-    if !directory.exists() {
-        return Ok(());
-    }
-
-    let mut files = Vec::new();
-    collect_files(directory, &mut files)?;
-    files.sort_by(|left, right| compare_paths_windows_like(left, right));
-    if request.reverse_rename_order {
-        files.reverse();
-    }
-
-    let mut next_indexes = HashMap::new();
-    let mut operations = Vec::new();
-
-    for file in files {
-        if is_tool_log(&file) {
-            continue;
-        }
-
-        if let Some(skip_message) = rename_skip_message(&file, protected_file_names) {
-            report.info(skip_message, Some(&file));
-            continue;
-        }
-
-        let Some(category) = category_for_path(&file, request.include_text) else {
-            report.warn("未识别的文件类型，保留原名。", Some(&file));
-            report.skipped += 1;
-            continue;
-        };
-
-        let category_name = category_folder_name(category, &request.folder_names);
-        let index = next_indexes.entry(category).or_insert(request.start_index);
-        let extension = file
-            .extension()
-            .map(|ext| ext.to_string_lossy().to_string())
-            .unwrap_or_default();
-        let next_name = build_file_name(
-            &request.rename_pattern,
-            root_name,
-            category_name,
-            *index,
-            request.padding,
-            &extension,
-        );
-        let intended_target = file.with_file_name(next_name);
-
-        *index += 1;
-
-        if file == intended_target {
-            report.info("文件名已符合规则。", Some(&file));
-            continue;
-        }
-
-        operations.push(RenameOperation {
-            source: file,
-            target: intended_target,
-        });
-    }
-
-    apply_rename_operations(operations, request.dry_run, report)
-}
-
-fn apply_rename_operations(
-    operations: Vec<RenameOperation>,
-    dry_run: bool,
-    report: &mut ProcessReport,
-) -> Result<(), String> {
     if operations.is_empty() {
         return Ok(());
     }
 
-    if dry_run {
+    if request.dry_run {
         for operation in operations {
             report.files_renamed += 1;
             report.info("预览：将重命名文件。", Some(&operation.source));
@@ -637,12 +547,7 @@ fn files_to_move_count(path: &Path) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        collections::HashSet,
-        env, fs,
-        path::Path,
-        time::{SystemTime, UNIX_EPOCH},
-    };
+    use std::{collections::HashSet, path::Path};
 
     use super::*;
 
@@ -662,57 +567,5 @@ mod tests {
             rename_skip_message(Path::new("cover.jpg"), &protected),
             Some("补充文件保留，不参与重命名。")
         );
-    }
-
-    #[test]
-    fn rename_only_keeps_files_in_place_and_skips_txt() {
-        let suffix = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let root = env::temp_dir().join(format!("rename-studio-rename-only-{suffix}"));
-        let extra = env::temp_dir().join(format!("rename-studio-extra-{suffix}.jpg"));
-
-        fs::create_dir_all(&root).unwrap();
-        fs::write(root.join("photo.jpg"), "image").unwrap();
-        fs::write(root.join("clip.mp4"), "video").unwrap();
-        fs::write(root.join("watermark.txt"), "watermark").unwrap();
-        fs::write(&extra, "extra").unwrap();
-
-        let request = ProcessRequest {
-            roots: Vec::new(),
-            folder_names: FolderNames {
-                images: "图包".to_string(),
-                videos: "视频".to_string(),
-                gifs: "GIF".to_string(),
-                texts: "文本".to_string(),
-            },
-            mappings: Vec::new(),
-            special_dirs: Vec::new(),
-            copy_files: vec![extra.display().to_string()],
-            copy_extras: true,
-            processing_mode: ProcessingMode::RenameOnly,
-            rename_pattern: "{category}_{index}".to_string(),
-            start_index: 1,
-            padding: 3,
-            dry_run: false,
-            include_text: true,
-            reverse_rename_order: false,
-        };
-        let mut report = ProcessReport::default();
-
-        process_root(&root, &request, &[], &HashSet::new(), &mut report).unwrap();
-
-        assert!(root.join("图包_001.jpg").exists());
-        assert!(root.join("视频_001.mp4").exists());
-        assert!(root.join("watermark.txt").exists());
-        assert!(!root.join("图包").exists());
-        assert!(!root.join("extra.jpg").exists());
-        assert_eq!(report.files_moved, 0);
-        assert_eq!(report.files_copied, 0);
-        assert_eq!(report.files_renamed, 2);
-
-        let _ = fs::remove_dir_all(&root);
-        let _ = fs::remove_file(&extra);
     }
 }
