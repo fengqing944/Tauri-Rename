@@ -298,8 +298,8 @@ fn rename_files_in_place(
             continue;
         }
 
-        if is_selected_copy_extra(&file, protected_file_names) {
-            report.info("补充文件保留，不参与重命名。", Some(&file));
+        if let Some(skip_message) = rename_skip_message(&file, protected_file_names) {
+            report.info(skip_message, Some(&file));
             continue;
         }
 
@@ -467,6 +467,21 @@ fn is_selected_copy_extra(path: &Path, copy_file_names: &HashSet<String>) -> boo
         .unwrap_or(false)
 }
 
+fn rename_skip_message(
+    path: &Path,
+    protected_file_names: &HashSet<String>,
+) -> Option<&'static str> {
+    if is_txt_file(path) {
+        return Some("TXT 水印文件保留原名。");
+    }
+
+    if is_selected_copy_extra(path, protected_file_names) {
+        return Some("补充文件保留，不参与重命名。");
+    }
+
+    None
+}
+
 fn ensure_dir(path: &Path, dry_run: bool, report: &mut ProcessReport) -> Result<(), String> {
     if path.exists() {
         return Ok(());
@@ -528,4 +543,29 @@ fn files_to_move_count(path: &Path) -> usize {
                 .count()
         })
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashSet, path::Path};
+
+    use super::*;
+
+    #[test]
+    fn txt_files_are_skipped_during_rename() {
+        assert_eq!(
+            rename_skip_message(Path::new("watermark.txt"), &HashSet::new()),
+            Some("TXT 水印文件保留原名。")
+        );
+    }
+
+    #[test]
+    fn protected_extra_files_are_skipped_during_rename() {
+        let protected = HashSet::from(["cover.jpg".to_string()]);
+
+        assert_eq!(
+            rename_skip_message(Path::new("cover.jpg"), &protected),
+            Some("补充文件保留，不参与重命名。")
+        );
+    }
 }
