@@ -11,12 +11,27 @@ pub(crate) struct ProcessRequest {
     pub(crate) special_dirs: Vec<String>,
     pub(crate) copy_files: Vec<String>,
     pub(crate) copy_extras: bool,
+    #[serde(default)]
+    pub(crate) processing_mode: ProcessingMode,
     pub(crate) rename_pattern: String,
     pub(crate) start_index: u32,
     pub(crate) padding: usize,
     pub(crate) dry_run: bool,
     pub(crate) include_text: bool,
     pub(crate) reverse_rename_order: bool,
+}
+
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum ProcessingMode {
+    Organize,
+    RenameOnly,
+}
+
+impl Default for ProcessingMode {
+    fn default() -> Self {
+        Self::Organize
+    }
 }
 
 #[derive(Debug, Deserialize)]

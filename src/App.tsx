@@ -18,7 +18,14 @@ import {
 import { useTauriDragDrop } from "./hooks/useTauriDragDrop";
 import { useWindowStatePersistence } from "./hooks/useWindowStatePersistence";
 import { readPersistedSettings, writePersistedSettings } from "./storage";
-import type { DirectoryMapping, FolderNames, Mode, ProcessReport, RuleTab } from "./types";
+import type {
+  DirectoryMapping,
+  FolderNames,
+  Mode,
+  ProcessingMode,
+  ProcessReport,
+  RuleTab,
+} from "./types";
 import {
   cleanMappings,
   cleanStringArray,
@@ -26,6 +33,7 @@ import {
   findDuplicateMappingKeys,
   isFolderNames,
   isMode,
+  isProcessingMode,
   normalizeKey,
   normalizeSelection,
   sortMappings,
@@ -38,6 +46,9 @@ function App() {
   const savedSettings = useMemo(() => readPersistedSettings(), []);
   const [mode, setMode] = useState<Mode>(() =>
     isMode(savedSettings.mode) ? savedSettings.mode : "single",
+  );
+  const [processingMode, setProcessingMode] = useState<ProcessingMode>(() =>
+    isProcessingMode(savedSettings.processingMode) ? savedSettings.processingMode : "organize",
   );
   const [activeTab, setActiveTab] = useState<RuleTab>("rules");
   const [roots, setRoots] = useState<string[]>([]);
@@ -90,7 +101,8 @@ function App() {
   const activeRoots = useMemo(() => (mode === "single" ? roots.slice(0, 1) : roots), [mode, roots]);
   const duplicateMappingKeys = useMemo(() => findDuplicateMappingKeys(mappings), [mappings]);
   const hasMappingDuplicates = duplicateMappingKeys.size > 0;
-  const canProcess = activeRoots.length > 0 && !isProcessing && !hasMappingDuplicates;
+  const mappingDuplicatesBlockProcessing = processingMode === "organize" && hasMappingDuplicates;
+  const canProcess = activeRoots.length > 0 && !isProcessing && !mappingDuplicatesBlockProcessing;
 
   const mappingRows = useMemo(() => {
     const query = normalizeKey(mappingQuery);
@@ -125,6 +137,7 @@ function App() {
     writePersistedSettings({
       version: 1,
       mode,
+      processingMode,
       presetId,
       folderNames,
       mappings,
@@ -141,6 +154,7 @@ function App() {
     });
   }, [
     mode,
+    processingMode,
     presetId,
     folderNames,
     mappings,
@@ -285,6 +299,7 @@ function App() {
           specialDirs,
           copyFiles,
           copyExtras,
+          processingMode,
           renamePattern,
           startIndex: Math.max(1, Number(startIndex) || 1),
           padding: Math.min(8, Math.max(1, Number(padding) || 3)),
@@ -312,7 +327,7 @@ function App() {
         canProcess={canProcess}
         isProcessing={isProcessing}
         dryRun={dryRun}
-        hasMappingDuplicates={hasMappingDuplicates}
+        hasMappingDuplicates={mappingDuplicatesBlockProcessing}
         onModeChange={setMode}
         onChooseRoots={chooseRoots}
         onClearRoots={clearRoots}
@@ -330,6 +345,7 @@ function App() {
           dryRun={dryRun}
           reverseRenameOrder={reverseRenameOrder}
           closeToTray={closeToTray}
+          processingMode={processingMode}
         />
 
         <Tabbar activeTab={activeTab} onTabChange={setActiveTab} />
@@ -339,6 +355,7 @@ function App() {
             <RulesPanel
               presetId={presetId}
               folderNames={folderNames}
+              processingMode={processingMode}
               renamePattern={renamePattern}
               startIndex={startIndex}
               padding={padding}
@@ -348,6 +365,7 @@ function App() {
               reverseRenameOrder={reverseRenameOrder}
               closeToTray={closeToTray}
               onApplyPreset={applyPreset}
+              onProcessingModeChange={setProcessingMode}
               onFolderNameChange={updateFolderName}
               onRenamePatternChange={setRenamePattern}
               onStartIndexChange={setStartIndex}

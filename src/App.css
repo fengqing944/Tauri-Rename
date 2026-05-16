@@ -553,6 +553,17 @@ label {
   gap: 10px;
 }
 
+.method-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 280px);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.method-row select {
+  width: 100%;
+}
+
 .pattern-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 86px 86px;
@@ -968,6 +979,7 @@ label {
   }
 
   .folder-grid,
+  .method-row,
   .pattern-row,
   .toggle-grid,
   .mapping-tools,

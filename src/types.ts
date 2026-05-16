@@ -1,4 +1,5 @@
 export type Mode = "single" | "batch";
+export type ProcessingMode = "organize" | "renameOnly";
 export type RuleTab = "rules" | "mapping" | "special" | "log";
 
 export type FolderNames = {
@@ -40,6 +41,7 @@ export type FolderPreset = {
 export type PersistedSettings = {
   version: 1;
   mode?: Mode;
+  processingMode?: ProcessingMode;
   presetId?: string;
   folderNames?: FolderNames;
   mappings?: DirectoryMapping[];
